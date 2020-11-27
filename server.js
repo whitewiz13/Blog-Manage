@@ -16,6 +16,7 @@ app.use(sslRedirect());
 //Setting port for live project
 const port = process.env.PORT || 3001;
 let gfs;
+
 //Setting up MongooseDB connectionn
 mongoose.Promise = global.Promise;
 //const url = 'mongodb://localhost:27017/whitewiz_blog';
