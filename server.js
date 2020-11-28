@@ -3,12 +3,14 @@ const express = require('express');
 const mongoose= require('mongoose');
 const path = require('path');
 const cors = require('cors'); 
-var multer = require('multer');
-const tokenGenerator = require('token-generator');
+const dotenv = require("dotenv");
+const jwt = require("jsonwebtoken");
+const multer = require('multer');
 const GridFsStorage = require('multer-gridfs-storage');
 const sslRedirect  = require('heroku-ssl-redirect').default;
 
 const app = express();
+dotenv.config();
 app.use(cors());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
@@ -17,6 +19,34 @@ app.use(sslRedirect());
 const port = process.env.PORT || 3001;
 let gfs;
 
+//JWT Token Management Functions
+function generateAccessToken(username) {
+    // expires after half and hour (1800 seconds = 30 minutes)
+    return jwt.sign(username, process.env.TOKEN_SECRET, { expiresIn: '1800s' });
+}
+function authenticateToken(req, res, next) {
+    // Gather the jwt access token from the request header
+    const token = req.headers['authorization'];
+    if (token == null) return res.sendStatus(401) // if there isn't any token
+    jwt.verify(token, process.env.TOKEN_SECRET, (err, user) => {
+      //console.log(err)
+      if (err) return res.sendStatus(403)
+      req.user = user
+      next() // pass the execution off to whatever request the client intended
+    });
+}
+function verifyToken(token){
+    if (token == null) return false; // if there isn't any token
+    if(jwt.verify(token, process.env.TOKEN_SECRET, (err, user) => {
+        if(err){
+            return false;
+        }
+        return true;
+        })){
+            return true;
+    }
+    return false;
+}
 //Setting up MongooseDB connectionn
 mongoose.Promise = global.Promise;
 //const url = 'mongodb://localhost:27017/whitewiz_blog';
@@ -76,11 +106,6 @@ const storage = new GridFsStorage({
 
 var save_post = multer({ storage: storage });
 
-//Setting up Token Generator
-var TokenGenerator = tokenGenerator({
-    salt: '1234567891011',
-    timestampMap: 'abcdefghij', // 10 chars array for obfuscation proposes
-});
 //-------Build Code (Server React pages)------
 const publicPath  = path.join(__dirname, 'client/build');
 app.use(express.static(publicPath));
@@ -116,7 +141,11 @@ app.post('/login',function(req,res){
     User.findOne({username:req.body.username},(err,doc)=>{
         if(doc!==null){
             if(req.body.pass === doc.pass){
-                res.send(doc);
+                const token = generateAccessToken({username: req.body.username});
+                doc.token = token;
+                doc.save().then(()=>{
+                    res.send(doc);
+                });
             }else{
                 res.send(false);
             }
@@ -126,8 +155,8 @@ app.post('/login',function(req,res){
     });
 });
 
-app.post('/save_post',save_post.single('file'),function(req,res){
-    User.findOne({token:req.body.token},(err,doc)=>{
+app.post('/save_post',authenticateToken,save_post.single('file'),function(req,res){
+    User.findOne({username:req.user.username},(err,doc)=>{
         if(doc!==null){
             var fileId = null;
             if(req.file !== undefined)
@@ -200,7 +229,7 @@ app.post('/load_blog',async function (req,res){
     await User.find({},async (err,doc)=>{
         if(doc.length){
             var dash;
-            if(req.body.token === doc[0].token){
+            if(verifyToken(req.body.token)){
                 dash = true;
             }else{
                 dash = false;
@@ -216,16 +245,16 @@ app.post('/load_blog',async function (req,res){
         }
     });
 });
-app.post('/load_data',function(req,res){
-    User.findOne({token : req.body.token},(err,doc)=>{
+app.post('/load_data',authenticateToken,function(req,res){
+    User.findOne({username : req.user.username},(err,doc)=>{
         if(doc!==null){
             doc.pass = "";
             res.send(doc);
         }
     });
 });
-app.post('/update_data',function(req,res){
-    User.findOne({token : req.body.token},(err,doc)=>{
+app.post('/update_data',authenticateToken,function(req,res){
+    User.findOne({username : req.user.username},(err,doc)=>{
         if(err) console.log(err);
         if(doc!==null){
             doc.Name = req.body.Name;
@@ -239,8 +268,8 @@ app.post('/update_data',function(req,res){
         }
     });
 });
-app.post('/delete_post',function(req,res){
-    User.findOne({token:req.body.token},(err,doc)=>{
+app.post('/delete_post',authenticateToken,function(req,res){
+    User.findOne({username:req.user.username},(err,doc)=>{
         if(doc!==null){
             Post.findOne({_id:req.body.id},(err,doc)=>{
                 if(doc.Image !== null){
@@ -261,8 +290,8 @@ app.post('/delete_post',function(req,res){
         }
     });
 });
-app.post('/change_pass',function(req,res){
-    User.findOne({token:req.body.token},(err,doc)=>{
+app.post('/change_pass',authenticateToken,function(req,res){
+    User.findOne({username:req.user.username},(err,doc)=>{
         if(doc!==null){
             if(req.body.oldPass === doc.pass){
                 doc.pass = req.body.newPass;
@@ -276,22 +305,33 @@ app.post('/change_pass',function(req,res){
     });
 });
 app.post('/check_auth',function(req,res){
-    User.findOne({token:req.body.token},(err,doc)=>{
-        if(doc!=null){
-            const udata ={
-                name : doc.Name,
-                auth :true
-            } 
-            res.send(udata);
-        }else
-        {
-            const udata ={
-                name : "",
-                auth :false
-            } 
-            res.send(udata);
-        }
-    });
+    const token = req.headers['authorization'];
+    const udata ={
+        name : "",
+        auth :false
+    }
+    if (token === 'null'){
+        res.send(udata);
+    }else{
+        jwt.verify(token, process.env.TOKEN_SECRET, (err, user) => {
+            //console.log(err)
+            if (err){
+                res.send(udata);
+            }else{
+                User.findOne({username:user.username},(err,doc)=>{
+                    if(doc!=null){
+                        const udata ={
+                            name : doc.Name,
+                            auth :true
+                        } 
+                        res.send(udata);
+                    }else{
+                        res.send(udata);
+                    }
+                });
+            }
+        });
+    }
 });
 app.listen(port,()=>{
     console.log("Server running at port : ",port);
