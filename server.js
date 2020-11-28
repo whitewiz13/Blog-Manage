@@ -22,7 +22,7 @@ let gfs;
 //JWT Token Management Functions
 function generateAccessToken(username) {
     // expires after half and hour (1800 seconds = 30 minutes)
-    return jwt.sign(username, process.env.TOKEN_SECRET, { expiresIn: '1800s' });
+    return jwt.sign(username, process.env.TOKEN_SECRET/*, { expiresIn: '1800s' }*/);
 }
 function authenticateToken(req, res, next) {
     // Gather the jwt access token from the request header
