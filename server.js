@@ -49,8 +49,7 @@ function verifyToken(token){
 }
 //Setting up MongooseDB connectionn
 mongoose.Promise = global.Promise;
-//const url = 'mongodb://localhost:27017/whitewiz_blog';
-const url = 'mongodb+srv://newDbUser:joker123@cluster0.2yseg.mongodb.net/whitewiz_blog';
+const url = 'mongodb://localhost:27017/whitewiz_blog';
 const mongoConfig = {
     useNewUrlParser : true,
     useUnifiedTopology: true,
