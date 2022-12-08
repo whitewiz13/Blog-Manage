@@ -12,6 +12,7 @@ const sslRedirect  = require('heroku-ssl-redirect').default;
 const app = express();
 dotenv.config();
 app.use(cors());
+
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(sslRedirect());
@@ -49,7 +50,8 @@ function verifyToken(token){
 }
 //Setting up MongooseDB connectionn
 mongoose.Promise = global.Promise;
-const url = 'mongodb://localhost:27017/whitewiz_blog';
+//const url = 'mongodb://localhost:27017/whitewiz_blog';
+const url = 'mongodb+srv://newDbUser:joker123@cluster0.2yseg.mongodb.net/whitewiz_blog';
 const mongoConfig = {
     useNewUrlParser : true,
     useUnifiedTopology: true,
